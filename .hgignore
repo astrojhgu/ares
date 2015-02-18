@@ -1,0 +1,26 @@
+syntax: glob
+
+dist/*
+build/*
+*.pyc
+*~
+*.hdf5
+*.npz
+*.txt
+*.h5
+*.png
+*.pkl
+MANIFEST
+doc/_build
+doc/_templates
+doc/_static
+gprof2dot.py
+*.ipynb
+*.pstats
+*.c
+*.h
+*.tar.gz
+*.dat
+*.f
+*.DS_Store
+ares.egg-info/PKG-INFO
