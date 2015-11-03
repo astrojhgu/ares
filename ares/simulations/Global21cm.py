@@ -48,12 +48,20 @@ class Global21cm:
             raise ValueError('Can only compute 21-cm signal in two-phase medium!')
             
         # If a physical model, proceed with initialization
-        self.medium = MultiPhaseMedium(**self.pf)
+        self.medium = MultiPhaseMedium(**kwargs)
 
         # Inline tracking of turning points
         if self.pf['track_extrema']:
             from ..analysis.TurningPoints import TurningPoints
-            self.track = TurningPoints(inline=True, **self.pf)    
+            self.track = TurningPoints(inline=True, **self.pf)
+        
+    @property
+    def pops(self):
+        return self.medium.field.pops
+        
+    @property
+    def grid(self):
+        return self.medium.field.grid
         
     def _init_dTb(self):
         """
@@ -67,7 +75,7 @@ class Global21cm:
             n_H = self.medium.parcel_igm.grid.cosm.nH(z[i])
             Ts = \
                 self.medium.parcel_igm.grid.hydr.Ts(
-                    z[i], data_igm['Tk'], 0.0, data_igm['h_2'], 
+                    z[i], data_igm['Tk'], 0.0, data_igm['h_2'],
                     data_igm['e'] * n_H)
             
             # Compute volume-averaged ionized fraction
@@ -234,6 +242,9 @@ class Global21cm:
                     l = np.argmin(np.abs(Earr - E_LyA))    
                     
                     Ja += self.medium.field.all_fluxes[-1][i][j][l]
+            
+            # Solver requires this                                            
+            Ja = np.atleast_1d(Ja)                                            
                                                                     
             # Compute spin temperature
             n_H = self.medium.parcel_igm.grid.cosm.nH(z)
@@ -248,7 +259,7 @@ class Global21cm:
 
             # Add derived fields to data
             data_igm.update({'Ts': Ts, 'dTb': dTb, 'Ja': Ja})
-
+            
             # Yield!            
             yield t, z, data_igm, data_cgm, RC_igm, RC_cgm 
 
@@ -276,4 +287,92 @@ class Global21cm:
         self.blobs = anl.blobs
         self.blob_names, self.blob_redshifts = \
             anl.blob_names, anl.blob_redshifts
-       
+            
+    def save(self, prefix, suffix='pkl', clobber=False):
+        """
+        Save results of calculation. Pickle parameter file dict.
+    
+        Notes
+        -----
+        1) will save files as prefix.history.suffix and prefix.parameters.pkl.
+        2) ASCII files will fail if simulation had multiple populations.
+    
+        Parameters
+        ----------
+        prefix : str
+            Prefix of save filename
+        suffix : str
+            Suffix of save filename. Can be hdf5 (or h5), pkl, or npz. 
+            Anything else will be assumed to be ASCII format (e.g., .txt).
+        clobber : bool
+            Overwrite pre-existing files of same name?
+    
+        """
+    
+        import os
+    
+        fn = '%s.history.%s' % (prefix, suffix)
+    
+        if os.path.exists(fn):
+            if clobber:
+                os.remove(fn)
+            else: 
+                raise IOError('%s exists! Set clobber=True to overwrite.' % fn)
+    
+        if suffix == 'pkl':      
+            import pickle
+                  
+            f = open(fn, 'wb')
+            pickle.dump(self.history, f)
+            f.close()
+    
+        elif suffix in ['hdf5', 'h5']:
+            import h5py
+            
+            f = h5py.File(fn, 'w')
+            for key in self.history:
+                f.create_dataset(key, data=np.array(self.history[key]))
+            f.close()
+    
+        elif suffix == 'npz':
+            f = open(fn, 'w')
+            np.savez(f, **self.history)
+            f.close()
+    
+        # ASCII format
+        else:            
+            f = open(fn, 'w')
+            print >> f, "#",
+    
+            for key in self.history:
+                print >> f, '%-18s' % key,
+    
+            print >> f, ''
+    
+            # Now, the data
+            for i in range(len(self.history[key])):
+                s = ''
+    
+                for key in self.sim.history:
+                    s += '%-20.8e' % self.history[key][i]
+    
+                if not s.strip():
+                    continue
+    
+                print >> f, s
+    
+            f.close()
+    
+        if os.path.exists('%s.parameters.pkl' % prefix):
+            if clobber:
+                os.remove('%s.parameters.pkl' % prefix)
+            else: 
+                raise IOError('%s exists! Set clobber=True to overwrite.' % fn)
+    
+        # Save parameter file
+        f = open('%s.parameters.pkl' % prefix, 'wb')
+        pickle.dump(self.pf, f)
+        f.close()
+    
+        print 'Wrote %s and %s.parameters.pkl' % (fn, prefix)
+    

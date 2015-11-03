@@ -32,6 +32,8 @@ sf_laws = \
  'instantaneous': 1e6,    # solar masses
 }
 
+imf_options = [2.35, 3.3, 30.]
+
 info = \
 {
  'flux_units': r'$\mathrm{erg} \ \mathrm{s}^{-1} \ \AA^{-1}$',
@@ -193,6 +195,13 @@ class StellarPopulation:
             self._energies = h_p * c / (self.wavelengths / 1e8) / erg_per_ev
     
         return self._energies    
+        
+    @property
+    def frequencies(self):
+        if not hasattr(self, '_frequencies'):
+            self._frequencies = c / (self.wavelengths / 1e8)
+    
+        return self._frequencies
 
     @property
     def weights(self):
@@ -214,6 +223,23 @@ class StellarPopulation:
             self._tavg_sed = np.dot(self.data, self.weights) / self.times.max()
         
         return self._tavg_sed
+        
+    @property
+    def emissivity_per_sfr(self):
+        """
+        Photon emissivity? 10.08.
+        """
+        if not hasattr(self, '_E_per_M'):
+            self._E_per_M = np.zeros_like(self.data)
+            for i in range(self.times.size):
+                self._E_per_M[:,i] = self.data[:,i] / (self.energies * erg_per_ev)    
+            
+            if self.pf['continuous_sf']:
+                pass
+            else:
+                self._E_per_M /= 1e6
+        
+        return self._E_per_M
         
     @property
     def NperB(self):
@@ -241,6 +267,28 @@ class StellarPopulation:
                 self._NperB /= 1e6
 
         return self._NperB
+        
+    def integrated_emissivity(self, l0, l1, unit='A'):
+        # Find band of interest -- should be more precise and interpolate
+        
+        if unit == 'A':
+            x = self.wavelengths
+            i0 = np.argmin(np.abs(x - l0))
+            i1 = np.argmin(np.abs(x - l1))
+        elif unit == 'Hz':
+            x = self.frequencies
+            i1 = np.argmin(np.abs(x - l0))
+            i0 = np.argmin(np.abs(x - l1))
+        
+        # Current units: photons / sec / baryon / Angstrom      
+        
+        # Count up the photons in each spectral bin for all times
+        photons_per_b_t = np.zeros_like(self.times)
+        for i in range(self.times.size):
+            photons_per_b_t[i] = np.trapz(self.emissivity_per_sfr[i1:i0,i], 
+                x=x[i1:i0])
+                
+        t = self.times * s_per_myr    
                 
     def PhotonsPerBaryon(self, Emin, Emax):    
         """
@@ -281,6 +329,8 @@ class StellarPopulation:
         
         # Integrate (cumulatively) over time
         return cumtrapz(photons_per_b_t, x=t, initial=0.0)
+        
+            
         
 class Spectrum(StellarPopulation):
     def __init__(self, **kwargs):

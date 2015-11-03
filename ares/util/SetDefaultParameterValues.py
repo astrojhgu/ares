@@ -11,10 +11,11 @@ into groups.
 """
 
 import os, imp
-from numpy import inf
+import numpy as np
 from ares import rcParams
 from ..physics.Constants import m_H, cm_per_kpc, s_per_myr
 
+inf = np.inf
 ARES = os.environ.get('ARES')
     
 tau_prefix = os.path.join(ARES,'input','optical_depth') \
@@ -30,7 +31,7 @@ _blob_redshifts.extend([6, 7, 8, 9, 10, 15, 20, 25, 30, 35, 40])
 
 # Nothing population specific
 _blob_names = ['z', 'igm_dTb', 'curvature', 'igm_Tk', 'igm_Ts', 'cgm_h_2', 
-    'igm_h_1', 'cgm_Gamma_h_1', 'igm_heat_h_1', 'Ja']
+    'igm_h_1', 'cgm_k_ion', 'igm_k_heat', 'igm_Ja', 'tau_e']
     
 default_blobs = (_blob_names, _blob_names)
 
@@ -233,14 +234,28 @@ def PopulationParameters():
     for par in srcpars:
         pf[par.replace('source', 'pop')] = srcpars[par]
     
-    
     tmp = \
     {
     
     "pop_type": 'galaxy',
     
+    "pop_tunnel": None,
+
+    "pop_model": 'fcoll', # fcoll, hod, clf, ham, user
+
     "pop_halo_model": None, # clf or hod (not yet implemented)
-    
+
+    # HAM model
+    "pop_constraints": None, # if ham model
+    "pop_Macc": None,
+
+    "pop_lf_z": None,
+
+    "pop_lf_M": None,
+    "pop_lf_Mstar": None,
+    "pop_lf_pstar": None,
+    "pop_lf_alpha": None,
+
     # Parameters for a HOD model
     "pop_duty_cycle": 1.0,
         
@@ -274,17 +289,13 @@ def PopulationParameters():
         
     # Main parameters in our typical global 21-cm models
     "pop_fstar": 0.1,
+    "pop_fstar_ceil": 1.0,
     "pop_Tmin": 1e4,
     "pop_Tmax": None,
     "pop_Mmin": None,
     "pop_Mmax": None,
     "pop_sfrd": None,
-    
-    # HOD parameters
-    "pop_tSF": 1.,  # Myr
-    
-    # Override luminosity density
-    "pop_rhoL": None,
+    "pop_sfrd_units": 'g/s/cm^3',
     
     # Scales SFRD
     "pop_Nlw": 9690.,
@@ -295,6 +306,15 @@ def PopulationParameters():
     "pop_xi_XR": None,     # product of fstar and fX
     "pop_xi_LW": None,     # product of fstar and Nlw
     "pop_xi_UV": None,     # product of fstar, Nion, and fesc
+    
+    # HOD parameters
+    "pop_tSF": 1.,  # Myr
+    
+    # HAM parameters
+    "pop_logM": np.arange(8, 13.5, 0.5), # Masses for AM
+    
+    # Override luminosity density
+    "pop_rhoL": None,
     
     # For multi-frequency calculations
     "pop_E": None,
@@ -311,7 +331,11 @@ def PopulationParameters():
     # Generalized normalization    
     # Mineo et al. (2012) (from revised 0.5-8 keV L_X-SFR)
     "pop_yield": 2.6e39, 
-    "pop_yield_units": 'erg/s/SFR',
+    "pop_yield_units": 'erg/s/sfr',
+    "pop_kappa_UV": None,
+
+    # If pop_yield_units == 'erg/s/sfr/hz, this is the reference wavelength
+    "pop_yield_wavelength": 1500.,
 
     'pop_fXh': None,
 
@@ -333,7 +357,7 @@ def PopulationParameters():
     pf.update(tmp)
     pf.update(rcParams)
 
-    return pf      
+    return pf
 
 def SourceParameters():
     pf = \

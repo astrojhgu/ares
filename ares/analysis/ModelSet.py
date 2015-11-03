@@ -311,6 +311,21 @@ class ModelSet(object):
             self._blob_redshifts = redshifts
 
         return mask, blobs
+        
+    @property
+    def data(self):
+        if not hasattr(self, '_data'):
+            self._data = {}
+            f = open('%s.data.pkl' % self.prefix, 'rb')
+            x, y, z, err = pickle.load(f)
+            f.close()
+            
+            self._data['x'] = x
+            self._data['y'] = y
+            self._data['err'] = err
+            self._data['z'] = z
+            
+        return self._data
 
     @property
     def load(self):
@@ -426,7 +441,9 @@ class ModelSet(object):
         if (self.subset is not None) or (not self.have_all_blobs):
         
             # Search file system for subset.*.pkl files
-            if self.subset == 'all' or (not self.have_all_blobs):
+            if self.subset is not None:
+                subset = self.subset
+            elif self.subset == 'all' or (not self.have_all_blobs):
                 subset = []
                 for path in ['.', self.path]:
                     to_search = '%s/%s.subset.*' % (path, self.fn)
@@ -434,10 +451,7 @@ class ModelSet(object):
                         blob = re.search(r'subset.=?([^.>]+)',fn).group(1)
         
                         if blob not in subset:
-                            subset.append(blob)
-                            
-            elif self.subset is not None:
-                subset = self.subset
+                            subset.append(blob)              
             else:
                 subset = None
                 
@@ -451,8 +465,8 @@ class ModelSet(object):
             all_blob_names, self._blob_redshifts = \
                 map(list, pickle.load(f))
             f.close()
-                
-        if (subset) is None or (subset == []):
+           
+        if subset is None or (subset == []):
             self._blob_names = all_blob_names
         else:
             self._blob_names = subset
@@ -464,8 +478,9 @@ class ModelSet(object):
         if not hasattr(self, '_blobs'):
             # Read in individual blob files
             if (self.subset is not None) or (not self.have_all_blobs):
-            
-                if self.subset == 'all' or (not self.have_all_blobs):
+                if self.subset is not None:
+                    subset = self.subset
+                elif self.subset == 'all' or (not self.have_all_blobs):
                     subset = []
                     for path in ['.', self.path]:
                         to_search = '%s/%s.subset.*' % (path, self.fn)
@@ -474,8 +489,6 @@ class ModelSet(object):
             
                             if blob not in subset:
                                 subset.append(blob)
-                elif self.subset is not None:
-                    subset = self.subset
                 else:
                     subset = None
             
@@ -542,6 +555,29 @@ class ModelSet(object):
     #    for key in f:
     #        mask = f[key].attrs.get('mask')
     #        results[key] = np.ma.array(f[key].value, mask=mask)
+            
+    @property
+    def timing(self):
+        if not hasattr(self, '_timing'):
+            self._timing = []
+            
+            i = 1
+            fn = '%s.timing_%s.pkl' % (self.prefix, str(i).zfill(4))
+            while os.path.exists(fn):
+                f = open(fn, 'rb')
+                while True:
+                    try:
+                        t, kw = pickle.load(f)
+                        self._timing.append((t, kw))
+                    except EOFError:
+                        break
+                        
+                f.close()
+                i += 1
+                fn = '%s.timing_%s.pkl' % (self.prefix, str(i).zfill(4))  
+                
+                
+        return self._timing
             
     def save_hdf5(self):
         if not have_h5py:
@@ -1820,7 +1856,8 @@ class ModelSet(object):
     def PosteriorPDF(self, pars, to_hist=None, is_log=None, z=None, ax=None, fig=1, 
         multiplier=1., nu=[0.95, 0.68], overplot_nu=False, density=True, cdf=False,
         color_by_like=False, filled=True, take_log=False, bins=20, skip=0, skim=1, 
-        contour_method='raw', excluded=False, stop=None, **kwargs):
+        contour_method='raw', excluded=False, stop=None, rotate_x=45.,
+        rotate_y=45., **kwargs):
         """
         Compute posterior PDF for supplied parameters. 
     
@@ -2029,7 +2066,11 @@ class ModelSet(object):
         self.set_axis_labels(ax, pars, is_log, take_log, labels)
 
         # Rotate ticks?
-
+        for tick in ax.get_xticklabels():
+            tick.set_rotation(rotate_x)
+        for tick in ax.get_yticklabels():
+            tick.set_rotation(rotate_y)
+        
         pl.draw()
         
         return ax
@@ -2721,11 +2762,15 @@ class ModelSet(object):
         elif type(z) is not list:
             z = [z]
         
+        data = self.ExtractData(pars, z=z)
+        
         masks = []
         blob_vec = []
         for i in range(len(pars)):
-            blob = self.extract_blob(pars[i], z=z[i])
-            if hasattr(blob, 'mask'):
+            
+            blob = data[0][pars[i]]
+                
+            if hasattr(data, 'mask'):
                 masks.append(blob.mask)
             else:
                 masks.append(np.zeros_like(blob))
@@ -3051,7 +3096,8 @@ class ModelSet(object):
         else:
             raise NotImplemented('Only support for hdf5 so far. Sorry!')
         
-    def set_axis_labels(self, ax, pars, is_log, take_log=False, labels=None):
+    def set_axis_labels(self, ax, pars, is_log, take_log=False, labels=None,
+        rotate_x=45, rotate_y=45):
         """
         Make nice axis labels.
         """
@@ -3116,8 +3162,8 @@ class ModelSet(object):
             return
     
         log_it = is_log[pars[1]] or take_log[pars[1]]
-        ax.set_ylabel(make_label(pars[1], log_it, labels))
-
+        ax.set_ylabel(make_label(pars[1], log_it, labels))        
+        
         pl.draw()
                 
     def confidence_regions(self, L, nu=[0.95, 0.68]):

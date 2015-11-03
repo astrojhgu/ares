@@ -27,6 +27,7 @@ First, plot fcoll at a few redshifts, using symbols for numerical solutions.
 fig1 = pl.figure(1)
 ax1 = fig1.add_subplot(111)
 
+
 for i, z in enumerate(hmf_a.halos.z[120:-1:200]):
     ax1.loglog(hmf_a.halos.M[::25], hmf_a.halos.fcoll_tab[i][::25], 
         color='k')

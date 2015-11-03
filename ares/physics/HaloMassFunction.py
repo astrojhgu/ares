@@ -184,11 +184,18 @@ class HaloMassFunction(object):
             self.M = 10**self.logM
             self.fcoll_spline_2d = pickle.load(f)
             self.dndm = pickle.load(f)
+            try:
+                self.ngtm = pickle.load(f)
+                self.mgtm = pickle.load(f)
+            except EOFError:
+                pass
             f.close()
 
         else:
             raise IOError('Unrecognized format for hmf_table.')    
                 
+        self.lnM = np.log(self.M)
+        self.dndlnm = self.M * self.dndm        
         self.Nz = self.z.size
         self.Nm = self.M.size
         
@@ -262,11 +269,13 @@ class HaloMassFunction(object):
         # Masses in hmf are in units of Msun / h
         self.M = self.MF.M * self.cosm.h70
         self.logM = np.log10(self.M)
+        self.lnM = np.log(self.M)
         self.logM_over_h = np.log10(self.MF.M)
         self.Nm = self.M.size
         
         self.dndm = np.zeros([len(self.z), len(self.logM_over_h)])
         self.mgtm = np.zeros_like(self.dndm)
+        self.ngtm = np.zeros_like(self.dndm)
         self.fcoll_tab = np.zeros_like(self.dndm)
         
         pb = ProgressBar(len(self.z), 'fcoll')
@@ -290,6 +299,7 @@ class HaloMassFunction(object):
                 # Has units of h**4 / cMpc**3 / Msun
                 self.dndm[i] = self.MF.dndm.copy() / self.cosm.h70**4
                 self.mgtm[i] = self.MF.rho_gtm.copy()
+                self.ngtm[i] = self.MF.ngtm.copy() / self.cosm.h70**3
                 
                 # Remember that mgtm and mean_dens have factors of h**2
                 # so we're OK here dimensionally
@@ -299,6 +309,7 @@ class HaloMassFunction(object):
             
         pb.finish()
         
+        # Collect results!
         if size > 1:
             tmp = np.zeros_like(self.fcoll_tab)
             nothing = MPI.COMM_WORLD.Allreduce(self.fcoll_tab, tmp)
@@ -306,7 +317,15 @@ class HaloMassFunction(object):
             
             tmp2 = np.zeros_like(self.dndm)
             nothing = MPI.COMM_WORLD.Allreduce(self.dndm, tmp2)
-            self.dndm = tmp
+            self.dndm = tmp2
+            
+            tmp3 = np.zeros_like(self.ngtm)
+            nothing = MPI.COMM_WORLD.Allreduce(self.ngtm, tmp3)
+            self.ngtm = tmp3
+            #
+            #tmp4 = np.zeros_like(self.mgtm)
+            #nothing = MPI.COMM_WORLD.Allreduce(self.mgtm, tmp4)
+            #self.mgtm = tmp4
         
         # Fix NaN elements
         self.logfcoll_tab = np.log10(self.fcoll_tab)
@@ -492,7 +511,8 @@ class HaloMassFunction(object):
             f.create_dataset('logM', data=self.logM)
             f.create_dataset('fcoll', data=self.fcoll_tab)
             f.create_dataset('dndm', data=self.dndm)
-            
+            f.create_dataset('ngtm', data=self.ngtm)
+            f.create_dataset('mgtm', data=self.mgtm)            
             f.close()
             
             print 'Wrote %s.' % fn
@@ -524,6 +544,8 @@ class HaloMassFunction(object):
             pickle.dump(self.logM, f)
             pickle.dump(self.fcoll_spline_2d, f)
             pickle.dump(self.dndm, f)
+            pickle.dump(self.ngtm, f)
+            pickle.dump(self.mgtm, f)
             f.close()
             
             print 'Wrote %s.' % fn

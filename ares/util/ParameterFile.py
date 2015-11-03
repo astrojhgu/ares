@@ -40,8 +40,6 @@ def pop_id_num(par):
         
     # Look for integers within curly braces
     m = re.search(r"\{([0-9])\}", par)
-    
-    #m = re.search(r"\{([A-Za-z0-9_]+)\}", par)
 
     if m is None:
         
@@ -51,7 +49,7 @@ def pop_id_num(par):
         if m is None:
             return None, None
     
-    prefix = par.split(m.group(0))[0]
+    prefix = par.replace(m.group(0), '')
     
     return prefix, int(m.group(1))
 

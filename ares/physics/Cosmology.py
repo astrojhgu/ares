@@ -71,7 +71,7 @@ class Cosmology:
         self.delta_c0 = 1.686
         self.TcmbNow = self.cmb_temp_0
         
-        self.fbaryon = self.omega_b_0 / self.omega_cdm_0
+        self.fbaryon = self.omega_b_0 / self.omega_m_0
         
         # Used in hmf
         self.pars = {'omega_lambda':self.omega_l_0,
@@ -169,10 +169,13 @@ class Cosmology:
     
     def LuminosityDistance(self, z):
         """
-        Returns luminosity distance in Mpc.  Assumes we mean distance from us (z = 0).
+        Returns luminosity distance in cm.  Assumes we mean distance from us (z = 0).
         """
         
-        return (1. + z) * self.ComovingRadialDistance(0., z)
+        integr = quad(lambda z: self.hubble_0 / self.HubbleParameter(z), 
+            0.0, z)[0]
+        
+        return integr * c * (1. + z) / self.hubble_0
         
     def ComovingRadialDistance(self, z0, z):
         """

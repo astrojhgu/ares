@@ -1,12 +1,12 @@
 """
 
-test_sed_mcd.py
+test_sed_agn.py
 
 Author: Jordan Mirocha
 Affiliation: University of Colorado at Boulder
 Created on: Thu May  2 10:46:44 2013
 
-Description: Plot a simple power-law spectrum.
+Description: Plot Sazonov et al. (2004) AGN template SED.
 
 """
 
@@ -17,22 +17,15 @@ import matplotlib.pyplot as pl
 pars = \
 {
  'source_type': 'bh', 
- 'source_sed': 'pl',
- 'source_Emin': 2e2,
+ 'source_sed': 'sazonov2004',
+ 'source_Emin': 1,
  'source_Emax': 3e4,
 }
 
-ls = [':', '--', '-']
-for i, alpha in enumerate([-0.5, -1.5, -2.5]):
-    pars.update({'source_alpha': alpha})
+src = ares.sources.BlackHole(init_tabs=False, **pars)
+bh = ares.analysis.Source(src)
 
-    src = ares.sources.BlackHole(init_tabs=False, **pars)
-    bh = ares.analysis.Source(src)
-    
-    ax = bh.PlotSpectrum(ls=ls[i], 
-        label=r'$\alpha = %.2g$' % alpha)
+ax = bh.PlotSpectrum()
 
 ax.set_ylim(1e-8, 1)
 pl.draw()
-
-
