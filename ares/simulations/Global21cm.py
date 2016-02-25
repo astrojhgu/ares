@@ -37,11 +37,11 @@ class Global21cm(BlobFactory,AnalyzeGlobal21cm):
 
         # See if this is a tanh model calculation
         is_phenom = self._check_if_phenom(**kwargs)
-        
+
         kwargs.update(defaults)
         if 'problem_type' not in kwargs:
             kwargs['problem_type'] = 101
-        
+
         self.kwargs = kwargs
 
     @property
@@ -108,12 +108,12 @@ class Global21cm(BlobFactory,AnalyzeGlobal21cm):
 
         if 'tanh_model' in kwargs:
             if kwargs['tanh_model']:
-                from ..util.TanhModel import TanhModel as PhenomModel
+                from ..phenom.Tanh21cm import Tanh21cm as PhenomModel
                 is_tanh = True
                 
         elif 'gaussian_model' in kwargs:
             if kwargs['gaussian_model']:
-                from ..util.GaussianSignal import GaussianModel as PhenomModel            
+                from ..phenom.Gaussian21cm import Gaussian21cm as PhenomModel            
                 is_gauss = True
                 
         model = PhenomModel(**kwargs)                

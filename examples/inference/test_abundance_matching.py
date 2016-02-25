@@ -26,6 +26,7 @@ s_betas = [0.34, 0.34]
 method = ['evolving', 'meurer1999']
 ##
 #
+
 markers = ['o', 's', '^', '>']
 
 # Masses
