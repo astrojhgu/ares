@@ -46,7 +46,7 @@ class ObservedLF(object):
             sources = [sources]    
             
         for source in sources:
-                        
+            
             src = read_lit(source)
             
             if redshift not in src.redshifts and (not round_z):
@@ -138,6 +138,8 @@ class ObservedLF(object):
         
         if sources == 'all':
             sources = all_datasets
+        elif type(sources) is str:
+            sources = [sources]
             
         for source in sources:  
             if source not in data:

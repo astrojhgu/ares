@@ -1218,7 +1218,7 @@ class ModelSet(BlobFactory):
                     
                 apply_mask.append(False)
         
-            else:
+            elif par in self.all_blob_names:
                 
                 try:
                     i, j, nd, dims = self.blob_info(par)
@@ -1260,6 +1260,20 @@ class ModelSet(BlobFactory):
                     to_hist.append(val)
                     
                 apply_mask.append(True)
+                
+            else:
+                cand = glob.glob('%s*%s*.pkl' % (self.prefix, par))
+                
+                if len(cand) != 1:
+                    raise IOError('Found %i files for %s.' % (len(cand), par))
+                      
+                f = open(cand[0], 'rb')     
+                dat = pickle.load(f)
+                f.close()
+                           
+                to_hist.append(dat)        
+                is_log.append(False)
+                apply_mask.append(True)            
                             
         # Re-organize
         if len(np.unique(pars)) < len(pars):
@@ -2178,19 +2192,27 @@ class ModelSet(BlobFactory):
         
     def ReconstructedFunction(self, name, ivar=None, fig=1, ax=None,
         shade_by_like=False, percentile=False, take_log=False, un_log=False, 
-        multiplier=1, skip=0, stop=None, **kwargs):    
+        multiplier=1, skip=0, stop=None, return_data=False, **kwargs):    
         """
         Reconstructed evolution in whatever the independent variable is.
         
         Parameters
         ----------
         name : str
-            Name of blob to reconstruct.
-        ivar : list
-            Independent variables at which to extract blob. If the blob is
-            1-D, one need not supply `ivar` -- instead, we'll grab the 
-            appropriate values automatically. If 2-D, however, one needs
-            to supply `ivar` explicitly.
+            Name of blob you're interested in.
+        ivar : list, np.ndarray
+            List of values (or nested list) of independent variables. If 
+            blob is 2-D, only need to provide the independent variable for
+            one of the dimensions, e.g., 
+                
+                # If LF data, plot LF at z=3.8
+                ivar = [3.8, None]
+                
+            or 
+            
+                # If LF data, plot z evolution of phi(MUV=-20)
+                ivar = [None, -20]
+        
         percentile : bool, float    
             If not False, should be the confidence interval to plot, e.g, 0.68.
         shade_by_like : bool
@@ -2201,6 +2223,7 @@ class ModelSet(BlobFactory):
             function.
             
         """
+        
         if ax is None:
             gotax = False
             fig = pl.figure(fig)
@@ -2214,31 +2237,65 @@ class ModelSet(BlobFactory):
         
         info = self.blob_info(name)
         ivars = self.blob_ivars[info[0]]
+        nd = info[2]
         
-        if info[2] != 1:
-            raise NotImplemented('If not 1-D blob, this routine needs fixing!')
-        
-        # We assume that ivars are [redshift, magnitude]
-        xarr = ivars
-        
+        if nd != 1 and (ivar is None):
+            raise NotImplemented('If not 1-D blob, must supply one ivar!')
+                
+        # Grab the maximum likelihood point 'cuz why not
         if self.is_mcmc:
             loc = np.argmax(self.logL[skip:stop])
         
-        data = self.get_blob(name)
-        
-        y = []
-        for i, x in enumerate(xarr):            
-            if percentile:
-                lo, hi = np.percentile(data[:,i][skip:stop].compressed(), 
-                    (q1, q2))
-                y.append((lo, hi))    
-            elif (shade_by_like and self.is_mcmc):
-                y.append(data[:,i][skip:stop][loc])
+        # 1-D case 
+        if nd == 1:
+            # Read in the independent variable(s)
+            xarr = ivars[0]
+            
+            tmp, is_log = self.ExtractData(name, #ivar=xarr,
+                take_log=take_log, un_log=un_log, multiplier=multiplier)
+            
+            data = tmp[name].squeeze()
+            
+            y = []
+            for i, x in enumerate(xarr):
+                if percentile:
+                    lo, hi = np.percentile(data[:,i][skip:stop].compressed(), 
+                        (q1, q2))
+                    y.append((lo, hi))    
+                elif (shade_by_like and self.is_mcmc):
+                    y.append(data[:,i][skip:stop][loc])
+                else:
+                    dat = data[:,i][skip:stop].compressed()
+                    lo, hi = dat.min(), dat.max()
+                    y.append((lo, hi))
+        elif nd == 2:
+            if ivar[0] is None:
+                scalar = ivar[1]
+                vector = xarr = ivars[0]
+                slc = slice(-1, None, -1)
+
             else:
-                dat = data[:,i][skip:stop].compressed()
-                lo, hi = dat.min(), dat.max()
-                y.append((lo, hi))
-        
+                scalar = ivar[0]
+                vector = xarr = ivars[1]
+                slc = slice(0, None, 1)
+                        
+            y = []
+            for i, value in enumerate(vector):
+                iv = [scalar, value][slc]
+                data, is_log = self.ExtractData(name, ivar=iv,
+                    take_log=take_log, un_log=un_log, multiplier=multiplier)
+                        
+                if percentile:
+                    lo, hi = np.percentile(data[name][skip:stop].compressed(),
+                        (q1, q2))
+                    y.append((lo, hi))    
+                elif (shade_by_like and self.is_mcmc):
+                    y.append(data[name][skip:stop][loc])
+                else:
+                    dat = data[name][skip:stop].compressed()
+                    lo, hi = dat.min(), dat.max()
+                    y.append((lo, hi))
+                        
         if not (shade_by_like or percentile) and self.is_mcmc:
             if take_log:
                 y = 10**y
@@ -2255,8 +2312,13 @@ class ModelSet(BlobFactory):
                     y[element[0],element[1]] = 1e-15
         
             ax.fill_between(xarr, y[0], y[1], **kwargs)
-            
-        return ax
+        
+        pl.draw()
+                 
+        if return_data:
+            return ax, xarr, y
+        else:            
+            return ax
         
     def RedshiftEvolution(self, blob, ax=None, redshifts=None, fig=1,
         like=0.68, take_log=False, bins=20, label=None,
@@ -2380,7 +2442,7 @@ class ModelSet(BlobFactory):
         
         return ax
         
-    def CovarianceMatrix(self, pars, z=None):
+    def CovarianceMatrix(self, pars, ivar=None):
         """
         Compute covariance matrix for input parameters.
 
@@ -2395,12 +2457,7 @@ class ModelSet(BlobFactory):
         
         """
         
-        if z is None:
-            z = [None] * len(pars)
-        elif type(z) is not list:
-            z = [z]
-        
-        data = self.ExtractData(pars, z=z)
+        data = self.ExtractData(pars, ivar)
         
         masks = []
         blob_vec = []
@@ -2459,12 +2516,12 @@ class ModelSet(BlobFactory):
             
         return all_kwargs    
 
-    def CorrelationMatrix(self, pars, z=None, fig=1, ax=None):
+    def CorrelationMatrix(self, pars, ivar=None, fig=1, ax=None):
         """
         Plot correlation matrix.
         """
     
-        mu, cov = self.CovarianceMatrix(pars, z=z)
+        mu, cov = self.CovarianceMatrix(pars, ivar=ivar)
     
         corr = correlation_matrix(cov)
     
@@ -2479,11 +2536,10 @@ class ModelSet(BlobFactory):
     
     def get_blob(self, name, ivar=None):
         """
-        Extract array of values for a given quantity.
+        Extract an array of values for a given quantity.
         
-        If ivar is supplied, will return subset of that array corresponding
-        only to those ivars. If ivar is not supplied, you'll get the whole 
-        thing!
+        ..note:: If ivar is not supplied, this is equivalent to just reading
+            all data from disk.
         
         Parameters
         ----------
@@ -2503,9 +2559,12 @@ class ModelSet(BlobFactory):
             if ivar is None:
                 return blob
             else:
-                k = np.argmin(np.abs(self.blob_ivars[i] - ivar))
+                k = np.argmin(np.abs(self.blob_ivars[i][0] - ivar))
                 return blob[:,k]
         elif nd == 2:
+            if ivar is None:
+                return blob
+                    
             assert len(ivar) == 2, "Must supply 2-D coordinate for blob!"
             k1 = np.argmin(np.abs(self.blob_ivars[i][0] - ivar[0]))
             k2 = np.argmin(np.abs(self.blob_ivars[i][1] - ivar[1]))
@@ -2528,6 +2587,47 @@ class ModelSet(BlobFactory):
                     self._max_like_pars[par] = self.chain[iML,i]
             
         return self._max_like_pars
+        
+    def DeriveBlob(self, expr, varmap, save=True, name=None, clobber=False):
+        """
+        Derive new blob from pre-existing ones.
+        
+        Parameters
+        ----------
+        expr : str
+            For example, 'x - y'
+        varmap : dict
+            Relates variables in `expr` to blobs. For example, 
+            
+            varmap = {'x': 'nu_D', 'y': 'nu_C'}
+        
+        
+        """    
+        
+        blobs = varmap.values()
+        
+        data, is_log = self.ExtractData(blobs)
+        
+        for var in varmap.keys():
+            exec('%s = data[\'%s\']' % (var, varmap[var]))
+            
+        result = eval(expr)
+        
+        if save:
+            assert name is not None, "Must supply name for new blob!"
+            
+            nd = len(result.shape)
+            
+            fn = '%s.blob_%id.%s.pkl' % (self.prefix, nd, name)
+            
+            if os.path.exists(fn) and (not clobber):
+                raise IOError('%s exists! Set clobber=True or remove by hand.' % fn)
+        
+            f = open(fn, 'wb')
+            pickle.dump(result, f)
+            f.close()
+        
+        return result
         
     def save(self, pars, z=None, path='.', fmt='hdf5', clobber=False):
         """

@@ -28,6 +28,10 @@ except ImportError:
 class Global21cm(MultiPhaseMedium):
  
     def __getattr__(self, name):
+        """
+        This gets called anytime we try to fetch an attribute that doesn't
+        exist (yet).
+        """
                                                                               
         # Indicates that this attribute is being accessed from within a 
         # property. Don't want to override that behavior!
@@ -51,7 +55,7 @@ class Global21cm(MultiPhaseMedium):
                 except ValueError:
                     raise AttributeError('No attribute %s.' % name)    
     
-            if pt not in list('BCD'):
+            if pt not in ['B', 'C', 'D', 'ZC']:
                 # This'd be where e.g., zrei, should go
                 raise NotImplemented('help!')
 
@@ -63,10 +67,20 @@ class Global21cm(MultiPhaseMedium):
             elif quantity == 'nu':
                 self.__dict__[name] = \
                     nu_0_mhz / (1. + self.turning_points[pt][0])
-            else:
+            elif quantity in self.data_asc:
                 z = self.turning_points[pt][0]
                 self.__dict__[name] = \
                     np.interp(z, self.data_asc['z'], self.data_asc[quantity])
+            else:
+                z = self.turning_points[pt][0]
+                
+                # Treat derivatives specially                
+                if quantity == 'slope':    
+                    self.__dict__[name] = self.derivative_of_z(z)
+                elif quantity == 'curvature':
+                    self.__dict__[name] = self.curvature_of_z(z)
+                else:
+                    raise KeyError('Unrecognized quantity: %s' % quantity)
 
         return self.__dict__[name]
     
@@ -93,11 +107,11 @@ class Global21cm(MultiPhaseMedium):
     
     @property
     def dTb2dnu2(self):
-        if not hasattr(self, '_dTbdnu'):
+        if not hasattr(self, '_dTb2dnu2'):
             _dTbdnu = self.dTbdnu
             _nu = self._nu_p
-            self._nu_pp, self._dTbdnu = central_difference(_nu, _dTbdnu)
-        return self._dTbdnu        
+            self._nu_pp, self._dTb2dnu2 = central_difference(_nu, _dTbdnu)
+        return self._dTb2dnu2        
     
     @property
     def z_p(self):
@@ -115,7 +129,13 @@ class Global21cm(MultiPhaseMedium):
     def nu_p(self):
         if not hasattr(self, '_nu_p'):
             tmp = self.dTbdnu
-        return self._nu_p    
+        return self._nu_p
+    
+    @property
+    def nu_pp(self):
+        if not hasattr(self, '_nu_pp'):
+            tmp = self.dTb2dnu2
+        return self._nu_pp    
         
     @property
     def kurtosis(self):
@@ -142,6 +162,19 @@ class Global21cm(MultiPhaseMedium):
             else:
                 self._track = TurningPoints()
         return self._track
+        
+    def smooth_derivative(self, sm):
+        arr = self.z_p[np.logical_and(self.z_p >= 6, self.z_p <= 25)]
+        s = int(sm / np.diff(arr).mean())#self.pf['smooth_derivative']
+        
+        if s % 2 != 0:
+            s += 1
+        
+        boxcar = np.zeros_like(self.dTbdz)
+        boxcar[boxcar.size/2 - s/2: boxcar.size/2 + s/2] = \
+            np.ones(s) / float(s)
+        
+        return np.convolve(self.data['igm_dTb'], boxcar, mode='same')
     
     @property
     def turning_points(self):
@@ -151,19 +184,7 @@ class Global21cm(MultiPhaseMedium):
             # We've got the option to smooth the derivative before 
             # finding the extrema 
             if self.pf['smooth_derivative'] > 0:
-                sm = self.pf['smooth_derivative']
-                arr = self.z_p[np.logical_and(self.z_p >= 6, self.z_p <= 25)]
-                s = int(sm / np.diff(arr).mean())#self.pf['smooth_derivative']
-                
-                if s % 2 != 0:
-                    s += 1
-                
-                boxcar = np.zeros_like(self.dTbdz)
-                boxcar[boxcar.size/2 - s/2: boxcar.size/2 + s/2] = \
-                    np.ones(s) / float(s)
-                
-                dTb = np.convolve(self.data['igm_dTb'], boxcar, mode='same')
-                
+                dTb = self.smooth_derivative(self.pf['smooth_derivative'])
             else:
                 dTb = self.data['igm_dTb']
             
@@ -202,9 +223,21 @@ class Global21cm(MultiPhaseMedium):
 
         return self._turning_points
         
-    def derivative(self, freq):
+    def derivative_of_freq(self, freq):
         interp = interp1d(self.nu_p, self.dTbdnu, kind='linear')
         return interp(freq)
+    
+    def curvature_of_freq(self, freq):
+        interp = interp1d(self.nu_pp, self.dTb2dnu2, kind='linear')
+        return interp(freq)  
+    
+    def derivative_of_z(self, z):
+        freq = nu_0_mhz / (1. + z)
+        return self.derivative_of_freq(freq)
+
+    def curvature_of_z(self, z):
+        freq = nu_0_mhz / (1. + z)
+        return self.curvature_of_freq(freq)
     
     def SaturatedLimit(self, ax):
         z = nu_0_mhz / self.data['nu'] - 1.
@@ -319,7 +352,7 @@ class Global21cm(MultiPhaseMedium):
         if not gotax:    
             ax.set_yticks(yticks, minor=True)
         
-        if gotax:
+        if gotax and (ax.get_xlabel().strip()):
             return ax
             
         if ax.get_xlabel() == '':  
@@ -329,8 +362,7 @@ class Global21cm(MultiPhaseMedium):
                 ax.set_xlabel(labels['nu'])
         
         if ax.get_ylabel() == '':    
-            ax.set_ylabel(labels['igm_dTb'], 
-                fontsize='x-large')    
+            ax.set_ylabel(labels['dTb'], fontsize='x-large')    
         
         if 'label' in kwargs:
             if kwargs['label'] is not None:
@@ -403,3 +435,59 @@ class Global21cm(MultiPhaseMedium):
             return mp
         else:
             return ax
+            
+    def fill_between_sims(self, other_sim, ax=None, **kwargs):
+        sims = [self, other_sim]
+        
+        assert len(sims) == 2, 'Only works for sets of two simulations.'
+    
+        
+        nu = []; dTb = []; C = []; D = []
+    
+        for i, sim in enumerate(sims):
+    
+            nu.append(sim.data['nu'])
+            dTb.append(sim.data['igm_dTb'])
+    
+            ax = sim.GlobalSignature(ax=ax, **kwargs)
+    
+            C.append(sim.turning_points['C'])
+            D.append(sim.turning_points['D'])
+    
+        y1_w_x0 = np.interp(nu[0], nu[1], dTb[1])
+        ax.fill_between(nu[0], dTb[0], y1_w_x0, **kwargs)
+    
+        for tp in [C, D]:
+            nu_C_0 = nu_0_mhz / (1. + tp[0][0])
+            nu_C_1 = nu_0_mhz / (1. + tp[1][0])
+            T_C_0 = tp[0][1]
+            T_C_1 = tp[1][1]
+    
+            nu_min = min(nu_C_0, nu_C_1)    
+    
+            # Line connecting turning points
+            def y_min(nu):
+    
+                dnu = abs(nu_C_0 - nu_C_1)
+                dT = abs(T_C_0 - T_C_1)
+                m = dT / dnu
+    
+                return m * (nu - nu_min) + min(T_C_0, T_C_1)
+    
+            new_nu = np.linspace(min(nu_C_0, nu_C_1), max(nu_C_0, nu_C_1))
+    
+            new_T0 = np.interp(new_nu, nu[0], dTb[0])
+            new_T1 = np.interp(new_nu, nu[1], dTb[1])
+    
+            if tp == C:
+                ax.fill_between(new_nu, y_min(new_nu), np.minimum(new_T0, new_T1), 
+                    **kwargs)
+            else:
+                ax.fill_between(new_nu, y_min(new_nu), np.maximum(new_T0, new_T1), 
+                    **kwargs)
+    
+        pl.draw()
+    
+        return ax
+    
+    

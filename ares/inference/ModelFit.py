@@ -117,7 +117,7 @@ class LogPrior:
     def __init__(self, priors, parameters, is_log=None):
         self.pars = parameters  # just names *in order*
         self.priors = priors
-        
+
         if is_log is None:
             self.is_log = [False] * len(parameters)
         else:
@@ -497,7 +497,10 @@ class ModelFit(BlobFactory):
         if rank > 0:
             return
         
-        guesses_tmp = np.array(value)
+        if type(value) is dict:
+            guesses_tmp = np.array([value[par] for par in self.parameters])
+        else:    
+            guesses_tmp = np.array(value)
         
         if guesses_tmp.ndim == 1:
             self._guesses = sample_ball(guesses_tmp, self.jitter, 
@@ -898,8 +901,7 @@ class ModelFit(BlobFactory):
                 to_write = []
                 for l in range(self.nwalkers * blen):  
                     # indices: walkers*steps, blob group, blob
-                    barr = blobs_now[l][j][k]
-                                                    
+                    barr = blobs_now[l][j][k]                   
                     to_write.append(barr)   
                     
                 bfn = '%s.blob_%id.%s.pkl' \

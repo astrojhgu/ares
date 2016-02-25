@@ -117,7 +117,6 @@ common = \
  
  'tau_e': r'$\tau_e$',
  'tau_tot': r'$\tau_e$', 
- 'curvature': r'$\delta^{\prime \prime} T_b \ [\mathrm{mK}^2 \ \mathrm{MHz}^{-2}]$',
 }    
 ##
 #
@@ -139,11 +138,14 @@ history_elements = \
  'nu': r'$\nu$', 
  'Ja': r'$J_{\alpha}$', 
  'Jlw': r'$J_{\mathrm{LW}}$', 
+ 
+ 'slope': r'$\delta^{\prime} T_b \ [\mathrm{mK} \ \mathrm{MHz}^{-1}]$',
+ 'curvature': r'$\delta^{\prime \prime} T_b \ [\mathrm{mK}^2 \ \mathrm{MHz}^{-2}]$', 
 }
 
 tp_parameters = {}
 for key in history_elements:
-    for tp in list('BCD'):
+    for tp in ['B', 'C', 'D', 'ZC']:
         if key in ['z', 'nu']:
             tp_parameters['%s_%s' % (key, tp)] = \
                 r'%s_{\mathrm{%s}}$' % (history_elements[key][0:-1], tp)
@@ -194,10 +196,18 @@ pop_parameters = \
 sfe_parameters = \
 {
  "galaxy_lf": r'$\phi(M_{\mathrm{UV}})$',
- "sfe_Mfun_par0": r'$a_M^0$',
- "sfe_Mfun_par1": r'$a_M^1$',
- "sfe_Mfun_par2": r'$a_M^2$',
- "sfe_Mfun_par3": r'$a_M^3$',
+ "php_Mfun_par0": r'$a_M^0$',
+ "php_Mfun_par1": r'$a_M^1$',
+ "php_Mfun_par2": r'$a_M^2$',
+ "php_Mfun_par3": r'$a_M^3$',
+ "php_Mfun_par4": r'$a_M^4$',
+ "php_Mfun_par5": r'$a_M^5$',
+ "php_Mfun_par6": r'$a_M^6$',
+ "php_Mfun_lo_par0": r'$b_M^0$',
+ "php_Mfun_lo_par1": r'$b_M^1$',
+ "php_Mfun_lo_par2": r'$b_M^2$',
+ "php_Mfun_lo_par3": r'$b_M^3$',
+  "php_Mfun_lo_par4": r'$b_M^4$',
 }
 
 other = \
@@ -277,7 +287,7 @@ class Labeler(object):
         elif (popid is not None) and (redshift is None) and (prefix in labels):
             label = labels[prefix]
         elif redshift is not None and (prefix in labels):
-            label = r'$%s[z=%.2g]$' % (undo_mathify(labels[prefix]), redshift)
+            label = r'$%s[%.2g]$' % (undo_mathify(labels[prefix]), redshift)
         
         # Troubleshoot if label not found
         if label is None:

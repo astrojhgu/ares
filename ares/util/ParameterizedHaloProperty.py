@@ -1,6 +1,6 @@
 """
 
-StarFormationEfficiency.py
+ParameterizedHaloProperty.py
 
 Author: Jordan Mirocha
 Affiliation: UCLA
@@ -14,6 +14,9 @@ import numpy as np
 from .ParameterFile import ParameterFile
 
 z0 = 9. # arbitrary
+
+Mh_dep_parameters = ['pop_fstar', 'pop_fesc', 'pop_L1500_per_sfr', 
+    'pop_Nion', 'pop_Nlw']
 
 class ParameterizedHaloProperty(object):
     def __init__(self, **kwargs):
@@ -97,7 +100,7 @@ class ParameterizedHaloProperty(object):
         Compute the star formation efficiency.
         """
 
-        pars = [self.pf['php_Mfun_par%i' % i] for i in range(4)]
+        pars = [self.pf['php_Mfun_par%i' % i] for i in range(6)]
         lpars = [self.pf['php_Mfun_lo_par%i' % i] for i in range(4)]
         hpars = [self.pf['php_Mfun_hi_par%i' % i] for i in range(4)]
 
@@ -110,9 +113,58 @@ class ParameterizedHaloProperty(object):
         if self.Mfunc == 'lognormal':            
             f = self.fpeak(z) * np.exp(-(logM - np.log10(self.Mpeak(z)))**2 \
                 / 2. / self.sigma(z)**2)
+        elif self.Mfunc == 'pl':
+            p0 = pars[0]; p1 = pars[1]; p2 = pars[2]
+            f = p0 * (M / p1)**p2
         elif self.Mfunc == 'dpl':
             p0 = pars[0]; p1 = pars[1]; p2 = pars[2]; p3 = pars[3]
             f = 2. * p0 / ((M / p1)**-p2 + (M / p1)**p3)    
+        elif self.Mfunc == 'plsum2':
+            p0 = pars[0]; p1 = pars[1]; p2 = pars[2]; p3 = pars[3]
+            f = p0 * (M / 1e10)**p1 + p2 * (M / 1e10)**p3
+        elif (self.Mfunc == 'rstep'):
+            p0 = pars[0]; p1 = pars[1]; p2 = pars[2]
+            
+            if type(M) is np.ndarray:
+                lo = M <= p2
+                hi = M > p2
+                
+                return lo * p0 * p1 + hi * p1 
+            else:
+                if M <= p2:
+                    return p0 * p1
+                else:
+                    return p1
+        elif (self.Mfunc == 'astep'):
+            p0 = pars[0]; p1 = pars[1]; p2 = pars[2]
+        
+            if type(M) is np.ndarray:
+                lo = M <= p2
+                hi = M > p2
+        
+                return lo * p0 + hi * p1 
+            else:
+                if M <= p2:
+                    return p0
+                else:
+                    return p1            
+        elif (self.Mfunc == 'pwpl'):
+            p0 = pars[0]; p1 = pars[1]; p2 = pars[2]; p3 = pars[3]
+            p4 = pars[4]; p5 = pars[5]
+            
+            if type(M) is np.ndarray:
+                lo = M <= p4
+                hi = M > p4
+                
+                return lo * p0 * (M / p4)**p1 \
+                     + hi * p2 * (M / p4)**p3
+            else:
+                if M <= p4:
+                    return p0 * (M / 1e10)**p1
+                else:
+                    return p2 * (M / 1e10)**p3
+        elif self.Mfunc == 'user':
+            f = self.pf['php_Mfun_fun'](z, M)
         elif self.Mfunc == 'poly':
             raise NotImplemented('sorry dude!')
         else:
@@ -124,18 +176,17 @@ class ParameterizedHaloProperty(object):
             self._apply_extrap = 0
 
             if self.Mlo_extrap:
-                p1 = self.pf['php_Mfun_lo_par0']
-                p2 = self.pf['php_Mfun_lo_par1']
+                p0 = self.pf['php_Mfun_lo_par0']
+                p1 = self.pf['php_Mfun_lo_par1']
                 if self.pf['php_Mfun_lo'] == 'pl':
-                    to_add = p1 * (M / 1e10)**p2
+                    to_add = p0 * (M / 1e10)**p1
                 elif self.pf['php_Mfun_lo'] == 'plexp':
-                    p3 = self.pf['php_Mfun_lo_par2']
-                    to_add = self.fstar(z, p1) * (M / p1)**p2 \
-                        * np.exp(-p3 / M)
+                    p2 = self.pf['php_Mfun_lo_par2']
+                    to_add = p0 * (M / 1e10)**p1 * np.exp(-M / p2)
                 elif self.pf['php_Mfun_lo'] == 'dpl':
-                    p3 = self.pf['php_Mfun_lo_par2']
-                    p4 = self.pf['php_Mfun_lo_par3']
-                    to_add = p1 / ((M / p2)**-p3 + (M / p2)**p4)
+                    p2 = self.pf['php_Mfun_lo_par2']
+                    p3 = self.pf['php_Mfun_lo_par3']
+                    to_add = 2 * p1 / ((M / p2)**-p3 + (M / p2)**p4)
 
             if self.Mhi_extrap:
                 if self.pf['php_Mfun_hi'] == 'exp':
@@ -151,6 +202,6 @@ class ParameterizedHaloProperty(object):
         f += to_add
         f *= to_mult
     
-        return np.minimum(f, self.pf['php_ceil'])
+        return np.maximum(np.minimum(f, self.pf['php_ceil']), self.pf['php_floor'])
               
         

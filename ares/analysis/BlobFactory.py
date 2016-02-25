@@ -346,10 +346,12 @@ class BlobFactory(object):
                 # 1-D blobs. Assume the independent variable is redshift 
                 # unless a function is provided
                 elif self.blob_nd[i] == 1:
-                    x = np.array(self.blob_ivars[i])
-                    if (self.blob_funcs[i][j] is None):
+                    x = np.array(self.blob_ivars[i]).squeeze()
+                    if (self.blob_funcs[i][j] is None) and (key in self.history):
                         blob = np.interp(x, self.history['z'][-1::-1], 
                             self.history[key][-1::-1])
+                    elif self.blob_funcs[i][j] is None:
+                        raise KeyError('Blob %s not in history!' % key)
                     else:
                         fname = self.blob_funcs[i][j]
                         func = parse_attribute(fname, self)
@@ -425,12 +427,12 @@ class BlobFactory(object):
                 data = pickle.load(f)
             except EOFError:
                 break
-        
+            
             all_data.extend(data)
                 
         # Used to have a squeeze() here for no apparent reason...
         # somehow it resolved itself.
-        all_data = np.array(all_data)    
+        all_data = np.array(all_data, dtype=np.float64)
 
         mask = np.logical_not(np.isfinite(all_data))
         masked_data = np.ma.array(all_data, mask=mask)
