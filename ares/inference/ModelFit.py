@@ -19,6 +19,7 @@ from ..physics.Constants import nu_0_mhz
 from ..util.ParameterFile import par_info
 import gc, os, sys, copy, types, time, re
 from ..analysis import Global21cm as anlG21
+from types import FunctionType, InstanceType
 from ..analysis.BlobFactory import BlobFactory
 from ..analysis.TurningPoints import TurningPoints
 from ..analysis.InlineAnalysis import InlineAnalysis
@@ -28,8 +29,8 @@ from ..util.ReadData import flatten_chain, flatten_logL, flatten_blobs, \
     read_pickled_chain
 
 try:
-    import cPickle as pickle
-except:
+    import dill as pickle
+except ImportError:
     import pickle    
 
 try:
@@ -113,8 +114,6 @@ def _str_to_val(p, par, pvals, pars):
     prefix = p.split(m.group(0))[0]
 
     return pvals[pars.index('%s{%i}' % (prefix, num))]
-
-    
         
 class LogLikelihood(object):
     def __init__(self, xdata, ydata, error, parameters, is_log,\
@@ -724,10 +723,15 @@ class ModelFit(BlobFactory):
         tmp = self.base_kwargs.copy()
         to_axe = []
         for key in tmp:
+            # this might be big, get rid of it
             if re.search(key, 'tau_table'):
                 to_axe.append(key)
+            #if re.search(key, 'hmf_instance'):
+            #    to_axe.append(key)    
+        
         for key in to_axe:
-            del tmp[key] # this might be big, get rid of it
+            tmp[key] = 'unpicklable'
+            
         pickle.dump(tmp, f)
         del tmp
         f.close()
@@ -860,10 +864,11 @@ class ModelFit(BlobFactory):
                 # Other stuff
                 else:
                     fn = '%s.%s.pkl' % (prefix, suffix)
-                    f = open(fn, 'ab')
-                    pickle.dump(data[i], f)
-                    f.close()
-
+                    #f = open(fn, 'ab')
+                    with open(fn, 'ab') as f:
+                        pickle.dump(list(data[i]), f)
+                    #f.close()
+                    
             # This is a running total already so just save the end result 
             # for this set of steps
             f = open('%s.facc.pkl' % prefix, 'ab')
