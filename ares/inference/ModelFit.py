@@ -304,7 +304,7 @@ class ModelFit(BlobFactory):
             return
         
         self._seed = value
-    
+
     @property 
     def xdata(self):
         if not hasattr(self, '_xdata'):
@@ -789,7 +789,6 @@ class ModelFit(BlobFactory):
         pos_all = []; prob_all = []; blobs_all = []
         for pos, prob, state, blobs in self.sampler.sample(pos, 
             iterations=steps, rstate0=state, storechain=False):
-
             # Only the rank 0 processor ever makes it here
             ct += 1
 
@@ -826,7 +825,7 @@ class ModelFit(BlobFactory):
             pickle.dump(self.sampler.acceptance_fraction, f)
             f.close()
 
-            print "Checkpoint %i: %s" % (ct / save_freq, time.ctime())
+            print "Checkpoint #%i: %s" % (ct / save_freq, time.ctime())
 
             del data, pos_all, prob_all, blobs_all
             gc.collect()
@@ -869,7 +868,6 @@ class ModelFit(BlobFactory):
                 blobs_now.extend(blobs[k])
         else:
             blobs_now = blobs
-
         # We're saving one file per blob
         # The shape of the array will be just blob_nd
 
@@ -878,7 +876,7 @@ class ModelFit(BlobFactory):
                 to_write = []
                 for l in range(self.nwalkers * blen):  
                     # indices: walkers*steps, blob group, blob
-                    barr = blobs_now[l][j][k]                   
+                    barr = blobs_now[l][j][k]
                     to_write.append(barr)   
                     
                 bfn = '%s.blob_%id.%s.pkl' \
