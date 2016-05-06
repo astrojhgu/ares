@@ -1,0 +1,43 @@
+"""
+
+test_21cm_parameterized.py
+
+Author: Jordan Mirocha
+Affiliation: University of Colorado at Boulder
+Created on: Wed Aug  6 08:54:15 MDT 2014
+
+Description: 21-cm signal in absence of astrophysical sources.
+
+"""
+
+import ares
+import numpy as np
+
+def test():
+
+    # Create instance of Hydrogen class
+    hydr = ares.physics.Hydrogen()
+    
+    # Analytic approximation to thermal history
+    Tk = lambda z: hydr.cosm.Tgas(z)
+    
+    # Spin temperature (arguments: z, Tk, Ja, xHII, ne)
+    Ts = lambda z: hydr.SpinTemperature(z, Tk(z), 0.0, 0.0, 0.0)
+    
+    # Brightness temperature (arguments: z, xHII, Ts)
+    dTb = lambda z: hydr.DifferentialBrightnessTemperature(z, 0.0, Ts(z))
+    
+    # Define redshift interval of interest
+    z = np.linspace(10, 1e3, 500)
+    
+    # Compute stuff
+    Tcmb = map(hydr.cosm.TCMB, z)
+    Tk = map(Tk, z)
+    Ts = map(Ts, z)
+    dTb = map(dTb, z)
+
+    return True
+    
+if __name__ == '__main__':
+    test()    
+
