@@ -1,0 +1,201 @@
+"""
+
+ParameterizedHaloProperty.py
+
+Author: Jordan Mirocha
+Affiliation: UCLA
+Created on: Tue Jan 19 09:44:21 PST 2016
+
+Description: 
+
+"""
+
+import numpy as np
+from ..util import ParameterFile
+
+def tanh_astep(M, lo, hi, logM0, logdM):
+    # NOTE: lo = value at the low-mass end
+    return (lo - hi) * 0.5 * (np.tanh((logM0 - np.log10(M)) / logdM) + 1.) + hi
+def tanh_rstep(M, lo, hi, logM0, logdM):
+    # NOTE: lo = value at the low-mass end
+    return hi * lo * 0.5 * (np.tanh((logM0 - np.log10(M)) / logdM) + 1.) + hi
+
+#z0 = 9. # arbitrary
+
+Mh_dep_parameters = ['pop_fstar', 'pop_fesc', 'pop_L1500_per_sfr', 
+    'pop_Nion', 'pop_Nlw']
+
+class ParameterizedHaloProperty(object):
+    def __init__(self, **kwargs):
+        self.pf = ParameterFile(**kwargs)
+    
+    @property
+    def func(self):
+        return self.pf['php_func']
+    
+    @property
+    def func_vars(self):
+        return self.pf['php_vars']
+
+    @property
+    def faux(self):
+        return self.pf['php_faux']
+    
+    @property
+    def faux(self):
+        return self.pf['php_faux']
+
+    @property
+    def _apply_extrap(self):
+        if not hasattr(self, '_apply_extrap_'):
+            self._apply_extrap_ = 1
+        return self._apply_extrap_
+
+    @_apply_extrap.setter
+    def _apply_extrap(self, value):
+        self._apply_extrap_ = value
+
+    def __call__(self, z, M, func=None):
+        """
+        Compute the star formation efficiency.
+        """
+
+        pars1 = [self.pf['php_func_par%i' % i] for i in range(6)]
+        pars2 = [self.pf['php_faux_par%i' % i] for i in range(6)]
+        #pars2 = []
+        #
+        #for i in range(6):
+        #    tmp = []
+        #    for j in range(6):
+        #        name = 'php_Mfun_par%i_par%i' % (i,j)
+        #        if name in self.pf:
+        #            tmp.append(self.pf[name])
+        #        else:
+        #            tmp.append(None)
+        #            
+        #    pars2.append(tmp)
+
+        return self._call(z, M, pars1)
+
+    def _call(self, z, M, pars, func=None):
+        """
+        A higher-level version of __call__ that accepts a few more kwargs.
+        """
+
+        if func is None:
+            func = self.func
+            s = 'func' 
+             
+        # Otherwise, assume it's the auxilary function
+        else:
+            func = self.faux   
+            s = 'faux'     
+
+        # Determine independent variables
+        var = self.pf['php_%s_var' % s].lower()
+        if var == 'mass':
+            x = M
+        else:
+            assert var == 'redshift'
+            x = z
+        
+        logx = np.log10(x)
+        
+        # Separate main parameters and auxiliary parameters 
+        
+        # Read-in parameters to more convenient names
+        # I don't usually use exec, but when I do, it's to do garbage like this
+        for i, par in enumerate(pars):
+            
+            if type(par) == str:
+                raise NotImplemented('deal with it')
+                # Parameters that are...parameterized! Things are nested, i.e,
+                # fstar is not necessarily separable.
+                
+                
+                
+            else:
+                exec('p%i = par' % i)
+            
+        # Actually execute the function                    
+        if func == 'lognormal':
+            f = p0 * np.exp(-(logx - p1)**2 / 2. / p2**2)    
+        elif func == 'pl':
+            f = p0 * (x / p1)**p2
+        elif func == 'plexp':
+            f = p0 * (x / p1)**p2 * np.exp(-x / p3)
+        elif func == 'dpl':
+            f = 2. * p0 / ((x / p1)**-p2 + (x / p1)**p3)    
+        elif func == 'plsum2':
+            f = p0 * (x / p1)**p2 + p3 * (x / p1)**p4
+        elif func == 'tanh_abs':
+            return tanh_astep(x, p0, p1, p2, p3)
+        elif func == 'tanh_rel':
+            return tanh_rstep(x, p0, p1, p2, p3)
+        elif func == 'rstep':
+            if type(x) is np.ndarray:
+                lo = x <= p2
+                hi = x > p2
+        
+                return lo * p0 * p1 + hi * p1 
+            else:
+                if x <= p2:
+                    return p0 * p1
+                else:
+                    return p1
+        elif func == 'astep':
+            if type(x) is np.ndarray:
+                lo = x <= p2
+                hi = x > p2
+
+                return lo * p0 + hi * p1 
+            else:
+                if x <= p2:
+                    return p0
+                else:
+                    return p1            
+        #elif func == 'pwpl':
+        #    if type(M) is np.ndarray:
+        #        lo = M <= p4
+        #        hi = M > p4
+        #
+        #        return lo * p0 * (M / p4)**p1 \
+        #             + hi * p2 * (M / p4)**p3
+        #    else:
+        #        if M <= p4:
+        #            return p0 * (M / p1)**p2
+        #        else:
+        #            return p3 * (M / p1)**p4
+        elif func == 'okamoto':
+            assert var == 'mass'
+            f = (1. + (2.**(p0 / 3.) - 1.) * (x / p1)**-p0)**(-3. / p0)
+        #elif func == 'user':
+        #    f = self.pf['php_func_fun'](z, M)
+        else:
+            raise NotImplementedError('Don\'t know how to treat %s function!' % func)
+
+        # Add or multiply to main function.
+        if (self.faux is not None) and self._apply_extrap:
+            self._apply_extrap = 0
+            
+            p = [self.pf['php_faux_par%i' % i] for i in range(6)]
+            aug = self._call(z, M, p, self.pf['php_faux'])
+            
+            if self.pf['php_faux_meth'] == 'multiply':
+                f *= aug
+            else:
+                f += aug
+
+            self._apply_extrap = 1    
+            
+        #if self.pf['php_ceil'] is not None:
+        #    f = np.minimum(f, self.pf['php_ceil'])
+        #if self.pf['php_floor'] is not None:
+        #    f = np.maximum(f, self.pf['php_floor'])
+        #
+        #f *= self.pf['php_boost']
+        #f /= self.pf['php_iboost']
+        
+        return f
+              
+        
