@@ -29,6 +29,7 @@ class Cosmology(object):
         self.omega_b_0 = self.pf['omega_b_0']
         self.omega_l_0 = self.pf['omega_l_0']
         self.omega_cdm_0 = self.omega_m_0 - self.omega_b_0
+
         self.hubble_0 = self.pf['hubble_0'] * 100 / km_per_mpc
         self.cmb_temp_0 = self.pf['cmb_temp_0']
         self.approx_highz = self.pf['approx_highz']
@@ -102,7 +103,7 @@ class Cosmology(object):
         """
         Returns lookback time from z_i to z_f in seconds, where z_i < z_f.
         """
-        
+
         return self.t_of_z(z_i) - self.t_of_z(z_f)
         
     def TCMB(self, z):
@@ -255,4 +256,3 @@ class Cosmology(object):
         return 18. * np.pi**2 + 82. * d - 39. * d**2
     
             
-    

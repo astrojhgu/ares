@@ -33,3 +33,4 @@ If the derivative of the signal is noisy (due to numerical artifacts, for exampl
 ``AttributeError: No attribute blobs.``
 ---------------------------------------
 This is a bit of a red herring. If you're running an MCMC fit and saving 2-D blobs, which always require you to pass the name of the function, this error occurs if you supply a function that does not exist. Check for typos and/or that the function exists where it should.
+
