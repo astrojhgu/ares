@@ -449,6 +449,7 @@ class HaloMassFunction(object):
             
             self.dfcolldz_tab = smooth(self.ztab, self.dfcolldz_tab, kern)
         
+            # Cut off edges of array?
             if self.pf['hmf_dfcolldz_trunc']:
                 self.dfcolldz_tab[0:kern] = np.zeros(kern)
                 self.dfcolldz_tab[-kern:] = np.zeros(kern)
@@ -457,10 +458,9 @@ class HaloMassFunction(object):
         
         # 'cuz time and redshift are different        
         self.dfcolldz_tab *= -1.
-        
-        fcoll_spline = None
 
-        # TESTING: force dfcolldz_tab > 0 [should be unnecessary]
+        fcoll_spline = None        
+        
         self.dfcolldz_tab[self.dfcolldz_tab < tiny_dfcolldz] = tiny_dfcolldz
 
         spline = interp1d(self.ztab, np.log10(self.dfcolldz_tab), 
@@ -480,7 +480,7 @@ class HaloMassFunction(object):
     def fcoll_spline_2d(self, value):
         self._fcoll_spline_2d = value
         
-    def fcoll(self, z, logMmin):
+    def fcoll_2d(self, z, logMmin):
         """
         Return fraction of mass in halos more massive than 10**logMmin.
         Interpolation in 2D, x = redshift = z, y = logMass.
@@ -725,7 +725,7 @@ class HaloMassFunction(object):
             pickle.dump(self.mgtm, f)
             pickle.dump({'growth_pars': self.growth_pars,
                 'transfer_pars': self.transfer_pars}, f)
-            pickle.dump(dict('hmf-version', hmf_v))
+            pickle.dump(dict(('hmf-version', hmf_v)))
             f.close()
             
         print 'Wrote %s.' % fn
